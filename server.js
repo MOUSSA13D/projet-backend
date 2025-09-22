@@ -2,6 +2,7 @@ const express = require('express');
 const { connectDB } = require('./config/basedonne.js');
 const cors = require('cors');
 const path = require('path');
+require('dotenv').config();
 
 
 // Connexion à MySQL
@@ -17,7 +18,11 @@ app.use('/api/agent', require('./route/agent'));
 app.use('/api/utilisateur', require('./route/utilisateurRoutes'));
 app.use('/api/compte', require('./route/compte'));
 app.use('/api/transaction', require('./route/transaction'));
+
+
 app.use('/api/login', require('./route/login'));
+
+app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
 
 // Middleware erreurs globales
 // app.use((err, req, res, next) => {

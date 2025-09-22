@@ -22,6 +22,7 @@ class Transaction {
       if (acteur_type == 'agent') {
         
         compteExpediteur = await this.agentModel.getAgentById(numero_compte_expediteur);
+
       } else {
         compteExpediteur = await this.compteModel.findByAccountNumber(numero_compte_expediteur);
       }
@@ -44,22 +45,41 @@ class Transaction {
       const nouveauSoldeDestinataire = parseFloat(compteDestinataire.solde) + parseFloat(montant);
 
       if (acteur_type == 'agent') {
-               console.log("test2",compteExpediteur)
 
         await this.agentModel.updateSolde(compteExpediteur.id, nouveauSoldeExpediteur);
 
-               console.log("test3",compteExpediteur)
+      } 
 
-      } else {
-        // await connection.execute('UPDATE comptes SET solde = ? WHERE numero_compte = ?', 
-        //   [nouveauSoldeExpediteur, compteExpediteur.numero_compte]);
-        await this.compteModel.updateSolde(compteExpediteur.numero_compte, nouveauSoldeExpediteur);
-      }
+      else  if(acteur_type == 'distributeur')
+        {
 
-    //   await connection.execute('UPDATE comptes SET solde = ? WHERE numero_compte = ?', 
-    //     [nouveauSoldeDestinataire, compteDestinataire.numero_compte]);
+          const bonus = montantTotal * 0.01;
+          const nouveauSoldeAvecBonus = nouveauSoldeExpediteur + bonus;
+        
+         await this.compteModel.updateSolde(compteExpediteur.numero_compte, nouveauSoldeAvecBonus);
+
+
+        }
+
+        else{
+          
+          const frais = montant * 0.02;
+          const montantTotalAvecFrais = montantTotal + frais;
+
+          if (compteExpediteur.solde < montantTotalAvecFrais) {
+            throw new Error('Solde insuffisant pour couvrir les frais de transfert');
+          }
+
+          const nouveauSoldeExpediteurAvecFrais = parseFloat(compteExpediteur.solde) - montantTotalAvecFrais;
+
+          await this.compteModel.updateSolde(compteExpediteur.numero_compte, nouveauSoldeExpediteurAvecFrais);
+
+        
+        }
+   
         await this.compteModel.updateSolde(compteDestinataire.numero_compte, nouveauSoldeDestinataire);
-        console.log("test5",compteDestinataire.numero_compte)
+
+
       // Enregistrer la transaction (virgule supprimée)
     await connection.execute(
   `INSERT INTO transactions (acteur_id, acteur_type, compte_id, type, statut, montant)
@@ -74,12 +94,11 @@ class Transaction {
   ]
 );
 
-
       await connection.commit();
 
       return {
-        compte_expediteur_id: compteExpediteur.id,
-        compte_destinataire_id: compteDestinataire.id,
+        compte_expediteur_id:  acteur_type == 'agent' ? compteExpediteur.id : compteExpediteur.numero_compte,
+        compte_destinataire_id: compteDestinataire.numero_compte,
         type: 'transfert',
         montant,
         statut: 'terminée'
@@ -93,8 +112,11 @@ class Transaction {
     }
   }
 
+
+
+
   // Effectuer un retrait (distributeur pour client seulement)
-  async effectuerRetrait(distributeur, numero_compte_client, montant) {
+  async effectuerRetrait(numerocompte, numero_compte_client, montant) {
     const pool = getDB();
     const connection = await pool.getConnection();
 
@@ -102,7 +124,7 @@ class Transaction {
       await connection.beginTransaction();
 
       // Vérifier que c'est bien un distributeur
-      const compteDistributeur = await this.compteModel.findByAccountNumber(distributeur);
+      const compteDistributeur = await this.compteModel.findByAccountNumber(numerocompte);
       if (!compteDistributeur) {
         throw new Error('Compte distributeur introuvable');
       }
@@ -117,10 +139,14 @@ class Transaction {
         throw new Error('Solde insuffisant sur le compte client');
       }
 
+
       // Calculer le bonus (1% pour les distributeurs)
       const bonus = montant * 0.01;
+
       const nouveauSoldeClient = parseFloat(compteClient.solde) - parseFloat(montant);
+
       const nouveauSoldeDistributeur = parseFloat(compteDistributeur.solde) + parseFloat(montant) + parseFloat(bonus);
+
 
       // Mettre à jour les soldes
       await connection.execute('UPDATE comptes SET solde = ? WHERE numero_compte = ?', 
@@ -128,6 +154,7 @@ class Transaction {
       
       await connection.execute('UPDATE comptes SET solde = ? WHERE numero_compte = ?', 
         [nouveauSoldeDistributeur, compteDistributeur.numero_compte]);
+
 
       // Enregistrer la transaction (guillemets ajoutés pour 'terminée')
       const [result] = await connection.execute(
@@ -139,9 +166,8 @@ class Transaction {
       await connection.commit();
 
       return {
-        id: result.insertId,
-        compte_distributeur_id: compteDistributeur.id,
-        compte_client_id: compteClient.id,
+        compte_distributeur_id: compteDistributeur.numero_compte,
+        compte_client_id: compteClient.numero_compte,
         type: 'retrait',
         montant,
         bonus,
@@ -155,6 +181,12 @@ class Transaction {
       connection.release();
     }
   }
+
+
+
+
+
+
 
   // Annuler un transfert (distributeur et agent peuvent le faire)
   async annulerTransfert(acteur_id, acteur_type, id) {
@@ -176,11 +208,14 @@ class Transaction {
 
       const transaction = transactions[0];
 
-      if (acteur_type == 'utilisateur') {
+      if (acteur_type == 'distributeur') {
+
         const [compteDest] = await connection.execute('SELECT solde FROM comptes WHERE numero_compte = ?', 
           [transaction.compte_id]);
+
           
         if (transaction.type === "credit") {
+
           if (compteDest[0].solde < transaction.montant) {
             throw new Error('Le destinataire n\'a pas suffisamment de fonds');
           }
@@ -189,17 +224,31 @@ class Transaction {
           
           await connection.execute('UPDATE comptes SET solde = ? WHERE numero_compte = ?', 
             [nouveauSolde, transaction.compte_id]);
+
+            const bonus = transaction.montant * 0.01;
+
+           
+            const nouveauSoldeDistributeur =   parseFloat(transaction.montant) - parseFloat(bonus);
+
             await connection.execute('UPDATE comptes SET solde = solde + ? WHERE numero_compte = ?',
-            [transaction.montant, acteur_id]);
+            [nouveauSoldeDistributeur, acteur_id]);
+
 
         } else {
+
             const [compteexp] = await connection.execute('SELECT solde FROM comptes WHERE numero_compte = ?',
             [transaction.acteur_id]);
 
             if (compteexp[0].solde < transaction.montant) {
               throw new Error('L\'expéditeur n\'a pas suffisamment de fonds');
             }
-            const nouveauSoldeExp = parseFloat(compteexp[0].solde) - parseFloat(transaction.montant);
+
+             const bonus = transaction.montant * 0.01;
+            const frais = parseFloat(compteexp[0].solde) - bonus
+
+
+            const nouveauSoldeExp = frais - parseFloat(transaction.montant);
+
 
             await connection.execute('UPDATE comptes SET solde = ? WHERE numero_compte = ?',
             [nouveauSoldeExp, transaction.acteur_id]);
@@ -211,6 +260,7 @@ class Transaction {
     
       } 
       else {
+
         if (transaction.acteur_id == acteur_id) {
           const [compteDest] = await connection.execute('SELECT solde FROM comptes WHERE numero_compte = ?', 
             [transaction.compte_id]);
@@ -234,10 +284,15 @@ class Transaction {
           await connection.execute('UPDATE comptes SET solde = ? WHERE numero_compte = ?',
             [nouveauSolde, transaction.compte_id]);
 
-          const nouveauSoldeExp = parseFloat(compteexp[0].solde) + parseFloat(transaction.montant);
+          
+          const frais = transaction.montant * 0.02;
+          const montantTotal = parseFloat(transaction.montant) + parseFloat(frais);
+          const nouveauSoldeExp = parseFloat(compteexp[0].solde) + montantTotal;
 
           await connection.execute('UPDATE comptes SET solde = ? WHERE numero_compte = ?',
             [nouveauSoldeExp, transaction.acteur_id]);
+
+
         }
       }
 
@@ -264,6 +319,8 @@ class Transaction {
     }
   }
 
+
+
   // Obtenir l'historique d'un compte avec plus de détails
   async getTransactionsByCompte(acteur_id) {
     const db = getDB();
@@ -271,6 +328,8 @@ class Transaction {
     const [rows] = await db.execute(query, [acteur_id]);
     return rows;
   }
+
+  
 }
 
 module.exports = Transaction;

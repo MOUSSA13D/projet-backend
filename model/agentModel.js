@@ -26,15 +26,16 @@ class Agent {
     return rows[0] || null;
   }
 
+
   // modifier solde d'un agent
   async updateSolde(id, nouveauSolde) {
     const [result] = await this.db.execute('UPDATE agents SET solde = ? WHERE id = ?', [nouveauSolde, id]);
     return result.affectedRows > 0;
   }
 
-  async verifyPassword(plainPassword, hashedPassword) {
-    return bcrypt.compare(plainPassword, hashedPassword);
-  }
+
+
+  
 }
 
 module.exports = Agent;

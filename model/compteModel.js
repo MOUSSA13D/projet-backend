@@ -2,10 +2,15 @@
 const { getDB } = require('../config/basedonne');
 
 class Compte {
+
+
   // Générer un numéro de compte unique
-  generateAccountNumber() {
-    return 'ACC' + Date.now() + Math.floor(Math.random() * 1000).toString().padStart(3, '0');
-  }
+ generateAccountNumber() {
+  // On prend les 3 derniers chiffres de Date.now() + un nombre aléatoire à 2 chiffres
+  const timePart = Date.now().toString().slice(-3); // ex: "874"
+  const randomPart = Math.floor(Math.random() * 100).toString().padStart(2, '0'); // ex: "42"
+  return (timePart + randomPart).slice(-5); // garantit 5 caractères
+}
 
   // Créer un compte
   async createCompte(utilisateur_id) {
@@ -27,6 +32,8 @@ class Compte {
     };
   }
 
+
+
   // Trouver un compte par ID utilisateur
   async findByUserId(utilisateur_id) {
     const db = getDB();
@@ -40,6 +47,7 @@ class Compte {
     return rows[0] || null;
   }
 
+
   // Trouver un compte par numéro de compte
   async findByAccountNumber(numero_compte) {
     const db = getDB();
@@ -47,6 +55,7 @@ class Compte {
     const [rows] = await db.execute('SELECT * FROM comptes WHERE numero_compte = ?', [numero_compte]);
     return rows[0] || null;
   }
+
 
   // Trouver un compte par ID
   async findById(id) {
@@ -61,6 +70,7 @@ class Compte {
     return rows[0] || null;
   }
 
+
   // Mettre à jour le solde d'un compte
   async updateSolde(id, nouveauSolde) {
     const db = getDB();
@@ -69,21 +79,20 @@ class Compte {
     return result.affectedRows > 0;
   }
 
-  // Obtenir le solde d'un compte
-  async getSolde(id) {
-    const db = getDB();
-    const query = 'SELECT solde FROM comptes WHERE id = ?';
-    const [rows] = await db.execute(query, [id]);
-    return rows[0]?.solde || 0;
-  }
+
+ 
+
+
 
   // Changer le statut d'un compte
   async updateStatut(id, statut) {
     const db = getDB();
-    const query = 'UPDATE comptes SET statut = ? WHERE id = ?';
+    const query = 'UPDATE comptes SET statut = ? WHERE utilisateur_id = ?';
     const [result] = await db.execute(query, [statut, id]);
     return result.affectedRows > 0;
   }
+
+
 
   // Obtenir tous les comptes
   async getAllComptes() {
@@ -98,13 +107,7 @@ class Compte {
     return rows;
   }
 
-  // Vérifier si un compte existe et est actif
-  async isAccountActive(numero_compte) {
-    const db = getDB();
-    const query = 'SELECT statut FROM comptes WHERE numero_compte = ?';
-    const [rows] = await db.execute(query, [numero_compte]);
-    return rows[0]?.statut === 'actif';
-  }
+
 }
 
 module.exports = Compte;

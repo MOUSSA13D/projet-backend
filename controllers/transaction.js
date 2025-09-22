@@ -5,6 +5,7 @@
 const Transaction = require('../model/transaction');
 
 const transactionController = {
+
   // Effectuer un transfert
   async effectuerTransfert(req, res) {
     try {
@@ -48,13 +49,17 @@ const transactionController = {
     }
   },
 
+
+
+
+  
   // Effectuer un retrait
   async effectuerRetrait(req, res) {
     try {
       const transaction = new Transaction();
-      const { distributeur, numero_compte_client, montant } = req.body;
+      const { numeroCompte, numero_compte_client, montant } = req.body;
 
-      if (!distributeur || !numero_compte_client || !montant) {
+      if (!numeroCompte || !numero_compte_client || !montant) {
         return res.status(400).json({
           success: false,
           message: 'Tous les champs sont requis'
@@ -69,7 +74,7 @@ const transactionController = {
       }
 
       const resultat = await transaction.effectuerRetrait(
-        distributeur,
+        numeroCompte,
         numero_compte_client,
         montant
       );
@@ -83,6 +88,9 @@ const transactionController = {
       res.status(500).json({ success: false, message: error.message });
     }
   },
+
+
+
 
   // Annuler un transfert
   async annulerTransfert(req, res) {
@@ -114,13 +122,15 @@ const transactionController = {
     }
   },
 
+
+
   // Obtenir l'historique d'un compte
   async getHistorique(req, res) {
     try {
       const transaction = new Transaction();
-      const { acteur_id } = req.params;
-
-      const historique = await transaction.getTransactionsByCompte(acteur_id);
+      const {id} = req.params;
+      console.log('Récupération de l\'historique pour le compte ID:', id);
+      const historique = await transaction.getTransactionsByCompte(id);
 
       res.json({
         success: true,
@@ -130,6 +140,8 @@ const transactionController = {
       res.status(500).json({ success: false, message: error.message });
     }
   }
+
+
 };
 
 module.exports = transactionController;

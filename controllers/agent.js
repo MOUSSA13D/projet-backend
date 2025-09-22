@@ -21,17 +21,10 @@ const agentController = {
     }
   },
 
-  // Optionnel : récupérer le solde
-  async getSolde(req, res) {
-    try {
-      const agent = await agentModel.getAgentById(req.params.id);
-      if (!agent) return res.status(404).json({ success: false, message: 'Agent introuvable' });
 
-      res.json({ success: true, data: { solde: agent.solde } });
-    } catch (error) {
-      res.status(500).json({ success: false, message: error.message });
-    }
-  }
+
+
+
 };
 
 module.exports = agentController;
