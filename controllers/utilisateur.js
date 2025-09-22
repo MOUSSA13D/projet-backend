@@ -20,7 +20,7 @@ function generateRandomPassword(length = 6) {
 }
 
 async function sendAccountEmail(email, nom, prenom, numeroCompte, motDePasse) {
-  const transporter = nodemailer.createTransporter({
+  const transporter = nodemailer.createTransport({
     service: 'gmail',
     auth: {
       user: 'fvdiliuwade@gmail.com',
@@ -38,8 +38,9 @@ async function sendAccountEmail(email, nom, prenom, numeroCompte, motDePasse) {
   await transporter.sendMail(mailOptions);
 }
 
+
 async function sendResetPasswordEmail(email, nom, prenom, nouveauMotDePasse) {
-  const transporter = nodemailer.createTransporter({
+  const transporter = nodemailer.createTransport({
     service: 'gmail',
     auth: {
       user: 'fvdiliuwade@gmail.com',
@@ -177,6 +178,8 @@ const utilisateurController = {
       res.status(500).json({ success: false, message: error.message });
     }
   },
+
+  
 
   // Mettre à jour un utilisateur
   async updateUser(req, res) {

@@ -2,20 +2,21 @@
 const express = require('express');
 const router = express.Router();
 const transactionController = require('../controllers/transaction');
+const { verifierToken } = require('../middlewere/authentification');
 
 // 📌 Effectuer un transfert
-router.post('/transfert', transactionController.effectuerTransfert);
+router.post('/transfert', verifierToken, transactionController.effectuerTransfert);
 
 
 // 📌 Effectuer un retrait
-router.post('/retrait', transactionController.effectuerRetrait);
+router.post('/retrait', verifierToken, transactionController.effectuerRetrait);
 
 
 // 📌 Annuler un transfert
-router.post('/annuler/:transactionId', transactionController.annulerTransfert);
+router.post('/annuler/:transactionId', verifierToken, transactionController.annulerTransfert);
 
 
 // 📌 Obtenir l'historique d'un compte
-router.get('/historique/:id', transactionController.getHistorique);
+router.get('/historique/:id', verifierToken, transactionController.getHistorique);
 
 module.exports = router;
