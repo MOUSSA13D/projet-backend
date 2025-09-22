@@ -30,4 +30,12 @@ router.put('/:id/statut', utilisateurController.updateStatus);
 router.put('/update/:id', upload.single('photo'), utilisateurController.updateUser);
 
 
+router.post('/forgot-password', utilisateurController.forgotPassword);
+
+// Route pour changer le mot de passe
+router.put('/:id/change-password', utilisateurController.changePassword);
+
+
+
+
 module.exports = router;

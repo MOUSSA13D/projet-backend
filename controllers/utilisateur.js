@@ -1,30 +1,26 @@
-
-
 // ============================================================================
 // controllers/utilisateurController.js
 const { 
   createUser, 
   findByEmail, 
   findById, 
-  // verifyPassword, 
+  verifyPassword, 
   updateStatus, 
   getAllUsers, 
-  updateUser 
+  updateUser,
+  updatePassword
 } = require('../model/utilisateurModel');
-
 
 const nodemailer = require('nodemailer');
 const Compte = require('../model/compteModel');
 const crypto = require('crypto');
-
-
 
 function generateRandomPassword(length = 6) {
   return crypto.randomBytes(length).toString('hex').slice(0, length);
 }
 
 async function sendAccountEmail(email, nom, prenom, numeroCompte, motDePasse) {
-  const transporter = nodemailer.createTransport({
+  const transporter = nodemailer.createTransporter({
     service: 'gmail',
     auth: {
       user: 'fvdiliuwade@gmail.com',
@@ -42,11 +38,28 @@ async function sendAccountEmail(email, nom, prenom, numeroCompte, motDePasse) {
   await transporter.sendMail(mailOptions);
 }
 
+async function sendResetPasswordEmail(email, nom, prenom, nouveauMotDePasse) {
+  const transporter = nodemailer.createTransporter({
+    service: 'gmail',
+    auth: {
+      user: 'fvdiliuwade@gmail.com',
+      pass: 'udjw eykf thgt cxqx'
+    }
+  });
+
+  const mailOptions = {
+    from: 'fvdiliuwade@gmail.com',
+    to: email,
+    subject: 'Réinitialisation de votre mot de passe',
+    text: `Bonjour ${prenom} ${nom},\n\nVotre mot de passe a été réinitialisé avec succès.\nVotre nouveau mot de passe : ${nouveauMotDePasse}\n\nPour votre sécurité, nous vous recommandons de changer ce mot de passe après votre première connexion.\n\nMerci.`
+  };
+
+  await transporter.sendMail(mailOptions);
+}
 
 const utilisateurController = {
 
-
-  // Créer un utilisateur  Distributeur ou client
+  // Créer un utilisateur Distributeur ou client
   async createUser(req, res) {
     try {
       const { nom, prenom, email, cni, telephone, naissance, role } = req.body;
@@ -55,31 +68,29 @@ const utilisateurController = {
         return res.status(400).json({ success: false, message: 'Tous les champs sont requis' });
       }
 
-          // Vérifier qu’une photo a bien été envoyée
-    if (!req.file) {
-      return res.status(400).json({ success: false, message: 'La photo est requise' });
-    }
+      // Vérifier qu'une photo a bien été envoyée
+      if (!req.file) {
+        return res.status(400).json({ success: false, message: 'La photo est requise' });
+      }
 
       const existingUser = await findByEmail(email);
       if (existingUser) return res.status(409).json({ success: false, message: 'Email déjà utilisé' });
 
-      
+      // Mot de passe aléatoire
+      const mot_de_passe = generateRandomPassword(6);
 
-        // Mot de passe aléatoire
-    const mot_de_passe = generateRandomPassword(6);
-
-    // Créer l’utilisateur avec le chemin de la photo
-    const nouvelUtilisateur = await createUser({
-      nom,
-      prenom,
-      email,
-      mot_de_passe,
-      cni,
-      telephone,
-      naissance,
-      role,
-      photo: req.file.filename  // On sauvegarde juste le nom de fichier
-    });
+      // Créer l'utilisateur avec le chemin de la photo
+      const nouvelUtilisateur = await createUser({
+        nom,
+        prenom,
+        email,
+        mot_de_passe,
+        cni,
+        telephone,
+        naissance,
+        role,
+        photo: req.file.filename
+      });
 
       // Créer automatiquement le compte
       const compteModel = new Compte();
@@ -101,10 +112,6 @@ const utilisateurController = {
     }
   },
 
-
-
-
-
   // Obtenir tous les utilisateurs
   async getAllUsers(req, res) {
     try {
@@ -114,8 +121,6 @@ const utilisateurController = {
       res.status(500).json({ success: false, message: error.message });
     }
   },
-
-
 
   // Obtenir un utilisateur par ID
   async getUserById(req, res) {
@@ -138,8 +143,6 @@ const utilisateurController = {
     }
   },
 
-
-
   // Mettre à jour le statut
   async updateStatus(req, res) {
     try {
@@ -154,7 +157,7 @@ const utilisateurController = {
 
       const updated = await updateStatus(req.params.id, statut);
 
-       // Changer le statut du compte associé
+      // Changer le statut du compte associé
       const compteModel = new Compte();
       const nouveauCompte = await compteModel.updateStatut(req.params.id, statut);
 
@@ -175,41 +178,144 @@ const utilisateurController = {
     }
   },
 
-
-
   // Mettre à jour un utilisateur
- async updateUser(req, res) {
-  try {
-    const { nom, prenom, telephone, email, cni } = req.body;
+  async updateUser(req, res) {
+    try {
+      const { nom, prenom, telephone, email, cni } = req.body;
 
-    if (!nom || !prenom || !telephone || !email || !cni) {
-      return res.status(400).json({
-        success: false,
-        message: 'Nom, prénom, téléphone, email et CNI sont requis'
+      if (!nom || !prenom || !telephone || !email || !cni) {
+        return res.status(400).json({
+          success: false,
+          message: 'Nom, prénom, téléphone, email et CNI sont requis'
+        });
+      }
+
+      // Rendre la photo facultative : on utilise req.file seulement si fourni
+      const userData = {
+        nom,
+        prenom,
+        telephone,
+        email,
+        cni,
+        photo: req.file ? req.file.filename : undefined
+      };
+
+      const updated = await updateUser(req.params.id, userData);
+
+      if (!updated) {
+        return res.status(404).json({ success: false, message: 'Utilisateur introuvable' });
+      }
+
+      res.json({ success: true, message: 'Utilisateur mis à jour avec succès' });
+    } catch (error) {
+      res.status(500).json({ success: false, message: error.message });
+    }
+  },
+
+  // Mot de passe oublié
+  async forgotPassword(req, res) {
+    try {
+      const { email } = req.body;
+
+      if (!email) {
+        return res.status(400).json({
+          success: false,
+          message: 'L\'email est requis'
+        });
+      }
+
+      // Vérifier si l'utilisateur existe
+      const utilisateur = await findByEmail(email);
+      if (!utilisateur) {
+        return res.status(404).json({
+          success: false,
+          message: 'Aucun compte associé à cet email'
+        });
+      }
+
+      // Générer un nouveau mot de passe aléatoire
+      const nouveauMotDePasse = generateRandomPassword(6);
+
+      // Mettre à jour le mot de passe dans la base de données
+      const updated = await updatePassword(utilisateur.id, nouveauMotDePasse);
+
+      if (!updated) {
+        return res.status(500).json({
+          success: false,
+          message: 'Erreur lors de la mise à jour du mot de passe'
+        });
+      }
+
+      // Envoyer le nouveau mot de passe par email
+      await sendResetPasswordEmail(email, utilisateur.nom, utilisateur.prenom, nouveauMotDePasse);
+
+      res.json({
+        success: true,
+        message: 'Un nouveau mot de passe a été envoyé à votre adresse email'
       });
+
+    } catch (error) {
+      res.status(500).json({ success: false, message: error.message });
     }
+  },
 
-    // Rendre la photo facultative : on utilise req.file seulement si fourni
-    const userData = {
-      nom,
-      prenom,
-      telephone,
-      email,
-      cni,
-      photo: req.file ? req.file.filename : undefined
-    };
+  // Changer mot de passe
+  async changePassword(req, res) {
+    try {
+      const { ancienMotDePasse, nouveauMotDePasse } = req.body;
+      const userId = req.params.id;
 
-    const updated = await updateUser(req.params.id, userData);
+      if (!ancienMotDePasse || !nouveauMotDePasse) {
+        return res.status(400).json({
+          success: false,
+          message: 'L\'ancien et le nouveau mot de passe sont requis'
+        });
+      }
 
-    if (!updated) {
-      return res.status(404).json({ success: false, message: 'Utilisateur introuvable' });
+      if (nouveauMotDePasse.length < 6) {
+        return res.status(400).json({
+          success: false,
+          message: 'Le nouveau mot de passe doit contenir au moins 6 caractères'
+        });
+      }
+
+      // Vérifier si l'utilisateur existe
+      const utilisateur = await findById(userId);
+      if (!utilisateur) {
+        return res.status(404).json({
+          success: false,
+          message: 'Utilisateur introuvable'
+        });
+      }
+
+      // Vérifier l'ancien mot de passe
+      const isValidPassword = await verifyPassword(ancienMotDePasse, utilisateur.mot_de_passe);
+      if (!isValidPassword) {
+        return res.status(400).json({
+          success: false,
+          message: 'L\'ancien mot de passe est incorrect'
+        });
+      }
+
+      // Mettre à jour avec le nouveau mot de passe
+      const updated = await updatePassword(userId, nouveauMotDePasse);
+
+      if (!updated) {
+        return res.status(500).json({
+          success: false,
+          message: 'Erreur lors de la mise à jour du mot de passe'
+        });
+      }
+
+      res.json({
+        success: true,
+        message: 'Mot de passe changé avec succès'
+      });
+
+    } catch (error) {
+      res.status(500).json({ success: false, message: error.message });
     }
-
-    res.json({ success: true, message: 'Utilisateur mis à jour avec succès' });
-  } catch (error) {
-    res.status(500).json({ success: false, message: error.message });
   }
-}
 
 };
 

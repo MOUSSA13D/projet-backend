@@ -24,8 +24,6 @@ async function createUser(userData) {
   return { id: result.insertId, ...userData, mot_de_passe: undefined };
 }
 
-
-
 // Trouver un utilisateur par email
 async function findByEmail(email) {
   const db = getDB();
@@ -33,16 +31,12 @@ async function findByEmail(email) {
   return rows[0] || null;
 }
 
-
-
 // Trouver un utilisateur par ID
 async function findById(id) {
   const db = getDB();
   const [rows] = await db.execute('SELECT * FROM utilisateurs WHERE id = ?', [id]);
   return rows[0] || null;
 }
-
-
 
 // Vérifier le mot de passe
 async function verifyPassword(plainPassword, hashedPassword) {
@@ -55,7 +49,6 @@ async function updateStatus(id, statut) {
   const [result] = await db.execute('UPDATE utilisateurs SET statut = ? WHERE id = ?', [statut, id]);
   return result.affectedRows > 0;
 }
-
 
 // Obtenir tous les utilisateurs
 async function getAllUsers() {
@@ -92,9 +85,18 @@ async function updateUser(id, userData) {
   return result.affectedRows > 0;
 }
 
-
-
-
+// Mettre à jour le mot de passe
+async function updatePassword(id, nouveauMotDePasse) {
+  const db = getDB();
+  const hashedPassword = await bcrypt.hash(nouveauMotDePasse, 10);
+  
+  const [result] = await db.execute(
+    'UPDATE utilisateurs SET mot_de_passe = ? WHERE id = ?', 
+    [hashedPassword, id]
+  );
+  
+  return result.affectedRows > 0;
+}
 
 module.exports = {
   createUser,
@@ -103,5 +105,6 @@ module.exports = {
   verifyPassword,
   updateStatus,
   getAllUsers,
-  updateUser
+  updateUser,
+  updatePassword
 };
