@@ -329,7 +329,14 @@ class Transaction {
     return rows;
   }
 
-  
+  //obtenir l'historique de tous es transactions
+  async getAllTransactions() {
+    const db = getDB();
+    const query = `SELECT * FROM transactions ORDER BY date_creation DESC`;
+    const [rows] = await db.execute(query);
+    return rows;}
+
+
 }
 
 module.exports = Transaction;

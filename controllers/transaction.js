@@ -52,7 +52,7 @@ const transactionController = {
 
 
 
-  
+
   // Effectuer un retrait
   async effectuerRetrait(req, res) {
     try {
@@ -139,7 +139,19 @@ const transactionController = {
     } catch (error) {
       res.status(500).json({ success: false, message: error.message });
     }
+  },
+
+  // Obtenir l'historique de toutes les transactions
+  async getAllTransactions(req, res) {
+    try {
+      const transaction = new Transaction();
+      const transactions = await transaction.getAllTransactions();
+      res.json({ success: true, data: transactions });
+    } catch (error) {
+      res.status(500).json({ success: false, message: error.message });
+    }
   }
+
 
 
 };
