@@ -54,7 +54,7 @@ async function updateStatus(id, statut) {
 async function getAllUsers() {
   const db = getDB();
   const [rows] = await db.execute(
-    'SELECT id, nom, prenom, email, cni, telephone, role, statut, date_creation FROM utilisateurs'
+    'SELECT id, nom, prenom, email, cni, telephone, role, statut, photo, date_creation FROM utilisateurs'
   );
   return rows;
 }
