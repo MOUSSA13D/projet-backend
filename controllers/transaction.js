@@ -50,9 +50,6 @@ const transactionController = {
   },
 
 
-
-
-
   // Effectuer un retrait
   async effectuerRetrait(req, res) {
     try {
@@ -88,8 +85,6 @@ const transactionController = {
       res.status(500).json({ success: false, message: error.message });
     }
   },
-
-
 
 
   // Annuler un transfert
@@ -151,7 +146,6 @@ const transactionController = {
       res.status(500).json({ success: false, message: error.message });
     }
   }
-
 
 
 };

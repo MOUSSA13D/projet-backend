@@ -1,113 +1,167 @@
-// models/compteModel.js
-const { getDB } = require('../config/basedonne');
+// model/compteModel.js
+const mongoose = require('mongoose');
+
+// Schéma pour le compte
+const compteSchema = new mongoose.Schema({
+  numero_compte: {
+    type: String,
+    required: true,
+    unique: true,
+    trim: true
+  },
+  utilisateur_id: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'Utilisateur',
+    required: true
+  },
+  solde: {
+    type: Number,
+    default: 0,
+    min: 0
+  },
+  statut: {
+    type: String,
+    enum: ['actif', 'bloqué'],
+    default: 'actif'
+  }
+}, {
+  timestamps: {
+    createdAt: 'date_creation',
+    updatedAt: 'date_modification'
+  }
+});
+
+// Transformer automatiquement _id en id et formater utilisateur_id proprement
+compteSchema.set('toJSON', {
+  transform: function (doc, ret) {
+    ret.id = ret._id.toString();
+    // si utilisateur_id est peuplé en tant qu'objet (document), on le laisse tel quel (il aura son propre id)
+    if (ret.utilisateur_id && typeof ret.utilisateur_id === 'object') {
+      // si la population a laissé un _id non transformé, tenter d'homogénéiser
+      if (ret.utilisateur_id._id) {
+        // convertir l'objet peuplé en JSON si possible
+        if (typeof ret.utilisateur_id.toJSON === 'function') {
+          ret.utilisateur_id = ret.utilisateur_id.toJSON();
+        } else {
+          // fallback : garder tel quel mais s'assurer qu'il y a un id
+          ret.utilisateur_id.id = ret.utilisateur_id._id ? ret.utilisateur_id._id.toString() : ret.utilisateur_id.id;
+          delete ret.utilisateur_id._id;
+        }
+      }
+    } else if (ret.utilisateur_id) {
+      // si c'est un ObjectId, convertir en string
+      ret.utilisateur_id = ret.utilisateur_id.toString();
+    }
+    delete ret._id;
+    delete ret.__v;
+    return ret;
+  }
+});
+
+const CompteModel = mongoose.model('Compte', compteSchema, 'comptes');
 
 class Compte {
-
+  constructor() {
+    this.model = CompteModel;
+  }
 
   // Générer un numéro de compte unique
- generateAccountNumber() {
-  // On prend les 3 derniers chiffres de Date.now() + un nombre aléatoire à 2 chiffres
-  const timePart = Date.now().toString().slice(-3); // ex: "874"
-  const randomPart = Math.floor(Math.random() * 100).toString().padStart(2, '0'); // ex: "42"
-  return (timePart + randomPart).slice(-5); // garantit 5 caractères
-}
+  generateAccountNumber() {
+    const timePart = Date.now().toString().slice(-3);
+    const randomPart = Math.floor(Math.random() * 100).toString().padStart(2, '0');
+    return (timePart + randomPart).slice(-5);
+  }
 
   // Créer un compte
   async createCompte(utilisateur_id) {
-    const db = getDB();
-    const numero_compte = this.generateAccountNumber();
+    try {
+      const numero_compte = this.generateAccountNumber();
 
-    const query = `
-      INSERT INTO comptes (numero_compte, utilisateur_id, solde)
-      VALUES (?, ?, ?)
-    `;
+      const compte = new this.model({
+        numero_compte,
+        utilisateur_id,
+        solde: 0,
+        statut: 'actif'
+      });
 
-    const [result] = await db.execute(query, [numero_compte, utilisateur_id, 0]);
-    return {
-      id: result.insertId,
-      numero_compte,
-      utilisateur_id,
-      solde: 0,
-      statut: 'actif',
-    };
+      const savedCompte = await compte.save();
+      return savedCompte.toJSON();
+    } catch (error) {
+      throw new Error(`Erreur lors de la création du compte: ${error.message}`);
+    }
   }
-
-
 
   // Trouver un compte par ID utilisateur
   async findByUserId(utilisateur_id) {
-    const db = getDB();
-    const query = `
-      SELECT c.*, u.nom, u.prenom, u.email
-      FROM comptes c
-      JOIN utilisateurs u ON c.utilisateur_id = u.id
-      WHERE c.utilisateur_id = ?
-    `;
-    const [rows] = await db.execute(query, [utilisateur_id]);
-    return rows[0] || null;
+    try {
+      const compte = await this.model.findOne({ utilisateur_id })
+        .populate('utilisateur_id', 'nom prenom email role statut');
+      return compte ? compte.toJSON() : null;
+    } catch (error) {
+      throw new Error(`Erreur lors de la recherche par ID utilisateur: ${error.message}`);
+    }
   }
-
 
   // Trouver un compte par numéro de compte
   async findByAccountNumber(numero_compte) {
-    const db = getDB();
-   
-    const [rows] = await db.execute('SELECT * FROM comptes WHERE numero_compte = ?', [numero_compte]);
-    return rows[0] || null;
+    try {
+      const compte = await this.model.findOne({ numero_compte });
+      return compte ? compte.toJSON() : null;
+    } catch (error) {
+      throw new Error(`Erreur lors de la recherche par numéro de compte: ${error.message}`);
+    }
   }
-
 
   // Trouver un compte par ID
   async findById(id) {
-    const db = getDB();
-    const query = `
-      SELECT c.*, u.nom, u.prenom, u.email
-      FROM comptes c
-      JOIN utilisateurs u ON c.utilisateur_id = u.id
-      WHERE c.id = ?
-    `;
-    const [rows] = await db.execute(query, [id]);
-    return rows[0] || null;
+    try {
+      const compte = await this.model.findById(id)
+        .populate('utilisateur_id', 'nom prenom email role statut');
+      return compte ? compte.toJSON() : null;
+    } catch (error) {
+      throw new Error(`Erreur lors de la recherche par ID: ${error.message}`);
+    }
   }
 
-
-  // Mettre à jour le solde d'un compte
-  async updateSolde(id, nouveauSolde) {
-    const db = getDB();
-    const query = 'UPDATE comptes SET solde = ? WHERE numero_compte = ?';
-    const [result] = await db.execute(query, [nouveauSolde, id]);
-    return result.affectedRows > 0;
+  // Mettre à jour le solde d'un compte (par numéro de compte)
+  async updateSolde(numero_compte, nouveauSolde) {
+    try {
+      const result = await this.model.findOneAndUpdate(
+        { numero_compte },
+        { solde: nouveauSolde },
+        { new: true }
+      );
+      return result !== null;
+    } catch (error) {
+      throw new Error(`Erreur lors de la mise à jour du solde: ${error.message}`);
+    }
   }
-
-
- 
-
-
 
   // Changer le statut d'un compte
-  async updateStatut(id, statut) {
-    const db = getDB();
-    const query = 'UPDATE comptes SET statut = ? WHERE utilisateur_id = ?';
-    const [result] = await db.execute(query, [statut, id]);
-    return result.affectedRows > 0;
+  async updateStatut(utilisateur_id, statut) {
+    try {
+      const result = await this.model.findOneAndUpdate(
+        { utilisateur_id },
+        { statut },
+        { new: true }
+      );
+      return result !== null;
+    } catch (error) {
+      throw new Error(`Erreur lors de la mise à jour du statut: ${error.message}`);
+    }
   }
-
-
 
   // Obtenir tous les comptes
   async getAllComptes() {
-    const db = getDB();
-    const query = `
-      SELECT c.*, u.nom, u.prenom, u.email, u.role
-      FROM comptes c
-      JOIN utilisateurs u ON c.utilisateur_id = u.id
-      ORDER BY c.date_creation DESC
-    `;
-    const [rows] = await db.execute(query);
-    return rows;
+    try {
+      const comptes = await this.model.find({})
+        .populate('utilisateur_id', 'nom prenom email role')
+        .sort({ date_creation: -1 });
+      return comptes.map(c => c.toJSON());
+    } catch (error) {
+      throw new Error(`Erreur lors de la récupération des comptes: ${error.message}`);
+    }
   }
-
-
 }
 
 module.exports = Compte;

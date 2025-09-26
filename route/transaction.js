@@ -7,10 +7,8 @@ const { verifierToken } = require('../middlewere/authentification');
 // 📌 Effectuer un transfert
 router.post('/transfert', transactionController.effectuerTransfert);
 
-
 // 📌 Effectuer un retrait
 router.post('/retrait', verifierToken, transactionController.effectuerRetrait);
-
 
 // 📌 Annuler un transfert
 router.post('/annuler/:transactionId', verifierToken, transactionController.annulerTransfert);

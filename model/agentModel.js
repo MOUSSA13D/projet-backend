@@ -1,41 +1,130 @@
-const { getDB } = require('../config/basedonne');
-const bcrypt = require('bcryptjs');
+// model/agentModel.js
+const mongoose = require('mongoose');
+
+// Schéma pour l'agent
+const agentSchema = new mongoose.Schema({
+  nom: {
+    type: String,
+    required: true,
+    trim: true
+  },
+  prenom: {
+    type: String,
+    required: true,
+    trim: true
+  },
+  email: {
+    type: String,
+    required: true,
+    unique: true,
+    lowercase: true,
+    trim: true
+  },
+  mot_de_passe: {
+    type: String,
+    required: true
+  },
+  solde: {
+    type: Number,
+    default: 0,
+    min: 0
+  }
+}, {
+  timestamps: { 
+    createdAt: 'date_creation',
+    updatedAt: 'date_modification' 
+  }
+});
+
+// Transformer automatiquement _id en id
+agentSchema.set('toJSON', {
+  transform: function(doc, ret) {
+    ret.id = ret._id;
+    delete ret._id;
+    delete ret.__v;
+    return ret;
+  }
+});
+
+// Modèle Agent
+const AgentModel = mongoose.model('Agent', agentSchema, 'agents');
 
 class Agent {
   constructor() {
-    this.db = getDB();
-  }
-
-  async getAgent() {
-    const [rows] = await this.db.query(`SELECT * FROM agents LIMIT 1`);
-    return rows[0];
+    this.model = AgentModel;
   }
 
   async getAgentById(id) {
-    const [rows] = await this.db.execute('SELECT * FROM agents WHERE id = ?', [id]);
-    return rows[0];
+    try {
+      const agent = await this.model.findById(id);
+      return agent ? agent.toJSON() : null;
+    } catch (error) {
+      throw new Error(`Erreur lors de la récupération de l'agent: ${error.message}`);
+    }
   }
 
   async getAllAgents() {
-    const [rows] = await this.db.query('SELECT * FROM agents');
-    return rows;
+    try {
+      const agents = await this.model.find({});
+      return agents.map(agent => agent.toJSON());
+    } catch (error) {
+      throw new Error(`Erreur lors de la récupération des agents: ${error.message}`);
+    }
   }
 
   async findByEmail(email) {
-    const [rows] = await this.db.execute('SELECT * FROM agents WHERE email = ?', [email]);
-    return rows[0] || null;
+    try {
+      const agent = await this.model.findOne({ email: email.toLowerCase() });
+      return agent ? agent.toJSON() : null;
+    } catch (error) {
+      throw new Error(`Erreur lors de la recherche par email: ${error.message}`);
+    }
   }
 
-
-  // modifier solde d'un agent
   async updateSolde(id, nouveauSolde) {
-    const [result] = await this.db.execute('UPDATE agents SET solde = ? WHERE id = ?', [nouveauSolde, id]);
-    return result.affectedRows > 0;
+    try {
+      const result = await this.model.findByIdAndUpdate(
+        id, 
+        { solde: nouveauSolde },
+        { new: true }
+      );
+      return result ? result.toJSON() : null;
+    } catch (error) {
+      throw new Error(`Erreur lors de la mise à jour du solde: ${error.message}`);
+    }
   }
 
+  async createAgent(agentData) {
+    try {
+      const agent = new this.model(agentData);
+      const savedAgent = await agent.save();
+      return savedAgent.toJSON();
+    } catch (error) {
+      throw new Error(`Erreur lors de la création de l'agent: ${error.message}`);
+    }
+  }
 
+  async updateAgent(id, updateData) {
+    try {
+      const result = await this.model.findByIdAndUpdate(
+        id, 
+        updateData,
+        { new: true, runValidators: true }
+      );
+      return result ? result.toJSON() : null;
+    } catch (error) {
+      throw new Error(`Erreur lors de la mise à jour de l'agent: ${error.message}`);
+    }
+  }
 
-  
+  async deleteAgent(id) {
+    try {
+      const result = await this.model.findByIdAndDelete(id);
+      return result ? result.toJSON() : null;
+    } catch (error) {
+      throw new Error(`Erreur lors de la suppression de l'agent: ${error.message}`);
+    }
+  }
 }
 
 module.exports = Agent;

@@ -1,101 +1,207 @@
-// models/utilisateurModel.js
-const { getDB } = require('../config/basedonne');
+// model/utilisateurModel.js
+const mongoose = require('mongoose');
 const bcrypt = require('bcryptjs');
 
-async function createUser(userData) {
-  const db = getDB();
-  const { nom, prenom, email, mot_de_passe, cni, telephone, naissance, role, photo } = userData;
-  const hashedPassword = await bcrypt.hash(mot_de_passe, 10);
-
-  const query = `
-    INSERT INTO utilisateurs (nom, prenom, email, mot_de_passe, cni, telephone, naissance, role, photo)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
-  `;
-  const [result] = await db.execute(query, [
-    nom, prenom, email, hashedPassword, cni, telephone, naissance, role, photo
-  ]);
-
-  if (role === 'client') {
-    await db.execute('INSERT INTO clients (utilisateur_id) VALUES (?)', [result.insertId]);
-  } else if (role === 'distributeur') {
-    await db.execute('INSERT INTO distributeurs (utilisateur_id) VALUES (?)', [result.insertId]);
+// Schéma pour l'utilisateur
+const utilisateurSchema = new mongoose.Schema({
+  nom: {
+    type: String,
+    required: true,
+    trim: true
+  },
+  prenom: {
+    type: String,
+    required: true,
+    trim: true
+  },
+  email: {
+    type: String,
+    required: true,
+    unique: true,
+    lowercase: true,
+    trim: true
+  },
+  mot_de_passe: {
+    type: String,
+    required: true
+  },
+  cni: {
+    type: String,
+    required: true,
+    unique: true
+  },
+  telephone: {
+    type: String,
+    required: true
+  },
+  naissance: {
+    type: Date,
+    required: true
+  },
+  role: {
+    type: String,
+    enum: ['client', 'distributeur', 'admin'],
+    required: true
+  },
+  photo: {
+    type: String,
+    required: true
+  },
+  statut: {
+    type: String,
+    enum: ['actif', 'bloqué'],
+    default: 'actif'
   }
+}, {
+  timestamps: {
+    createdAt: 'date_creation',
+    updatedAt: 'date_modification'
+  }
+});
 
-  return { id: result.insertId, ...userData, mot_de_passe: undefined };
+// Transformer automatiquement _id en id et gérer utilisateur_id quand peuplé
+utilisateurSchema.set('toJSON', {
+  transform: function (doc, ret) {
+    ret.id = ret._id.toString();
+    delete ret._id;
+    delete ret.__v;
+    // Ne pas renvoyer le mot de passe par accident
+    if (ret.mot_de_passe) delete ret.mot_de_passe;
+    return ret;
+  }
+});
+
+const UtilisateurModel = mongoose.model('Utilisateur', utilisateurSchema, 'utilisateurs');
+
+// Créer un utilisateur
+async function createUser(userData) {
+  try {
+    const { nom, prenom, email, mot_de_passe, cni, telephone, naissance, role, photo } = userData;
+    const hashedPassword = await bcrypt.hash(mot_de_passe, 10);
+
+    const utilisateur = new UtilisateurModel({
+      nom,
+      prenom,
+      email: email.toLowerCase(),
+      mot_de_passe: hashedPassword,
+      cni,
+      telephone,
+      naissance,
+      role,
+      photo
+    });
+
+    const savedUtilisateur = await utilisateur.save();
+    const userObj = savedUtilisateur.toJSON();
+    // mot_de_passe déjà supprimé dans transform mais on s'assure
+    if (userObj.mot_de_passe) delete userObj.mot_de_passe;
+    return userObj;
+  } catch (error) {
+    throw new Error(`Erreur lors de la création de l'utilisateur: ${error.message}`);
+  }
 }
 
 // Trouver un utilisateur par email
 async function findByEmail(email) {
-  const db = getDB();
-  const [rows] = await db.execute('SELECT * FROM utilisateurs WHERE email = ?', [email]);
-  return rows[0] || null;
+  try {
+    const utilisateur = await UtilisateurModel.findOne({
+      email: email.toLowerCase()
+    });
+    return utilisateur ? utilisateur.toJSON() : null;
+  } catch (error) {
+    throw new Error(`Erreur lors de la recherche par email: ${error.message}`);
+  }
 }
 
 // Trouver un utilisateur par ID
 async function findById(id) {
-  const db = getDB();
-  const [rows] = await db.execute('SELECT * FROM utilisateurs WHERE id = ?', [id]);
-  return rows[0] || null;
+  try {
+    const utilisateur = await UtilisateurModel.findById(id);
+    return utilisateur ? utilisateur.toJSON() : null;
+  } catch (error) {
+    throw new Error(`Erreur lors de la recherche par ID: ${error.message}`);
+  }
 }
 
 // Vérifier le mot de passe
 async function verifyPassword(plainPassword, hashedPassword) {
-  return bcrypt.compare(plainPassword, hashedPassword);
+  try {
+    return await bcrypt.compare(plainPassword, hashedPassword);
+  } catch (error) {
+    throw new Error(`Erreur lors de la vérification du mot de passe: ${error.message}`);
+  }
 }
 
 // Mettre à jour le statut
 async function updateStatus(id, statut) {
-  const db = getDB();
-  const [result] = await db.execute('UPDATE utilisateurs SET statut = ? WHERE id = ?', [statut, id]);
-  return result.affectedRows > 0;
+  try {
+    const result = await UtilisateurModel.findByIdAndUpdate(
+      id,
+      { statut },
+      { new: true }
+    );
+    return result !== null;
+  } catch (error) {
+    throw new Error(`Erreur lors de la mise à jour du statut: ${error.message}`);
+  }
 }
 
 // Obtenir tous les utilisateurs
 async function getAllUsers() {
-  const db = getDB();
-  const [rows] = await db.execute(
-    'SELECT id, nom, prenom, email, cni, telephone, role, statut, photo, date_creation FROM utilisateurs'
-  );
-  return rows;
+  try {
+    const utilisateurs = await UtilisateurModel.find({},
+      'nom prenom email cni telephone role statut photo date_creation'
+    );
+    return utilisateurs.map(u => u.toJSON());
+  } catch (error) {
+    throw new Error(`Erreur lors de la récupération des utilisateurs: ${error.message}`);
+  }
 }
 
 // Mettre à jour un utilisateur
 async function updateUser(id, userData) {
-  const db = getDB();
-  const { nom, prenom, telephone, email, cni, photo } = userData;
+  try {
+    const { nom, prenom, telephone, email, cni, photo } = userData;
 
-  let query, params;
-  if (photo) {
-    query = `
-      UPDATE utilisateurs 
-      SET nom = ?, prenom = ?, email = ?, cni = ?, photo = ?, telephone = ? 
-      WHERE id = ?
-    `;
-    params = [nom, prenom, email, cni, photo, telephone, id];
-  } else {
-    query = `
-      UPDATE utilisateurs 
-      SET nom = ?, prenom = ?, email = ?, cni = ?, telephone = ? 
-      WHERE id = ?
-    `;
-    params = [nom, prenom, email, cni, telephone, id];
+    const updateData = {
+      nom,
+      prenom,
+      email: email.toLowerCase(),
+      cni,
+      telephone
+    };
+
+    if (photo) {
+      updateData.photo = photo;
+    }
+
+    const result = await UtilisateurModel.findByIdAndUpdate(
+      id,
+      updateData,
+      { new: true, runValidators: true }
+    );
+
+    return result !== null;
+  } catch (error) {
+    throw new Error(`Erreur lors de la mise à jour de l'utilisateur: ${error.message}`);
   }
-
-  const [result] = await db.execute(query, params);
-  return result.affectedRows > 0;
 }
 
 // Mettre à jour le mot de passe
 async function updatePassword(id, nouveauMotDePasse) {
-  const db = getDB();
-  const hashedPassword = await bcrypt.hash(nouveauMotDePasse, 10);
-  
-  const [result] = await db.execute(
-    'UPDATE utilisateurs SET mot_de_passe = ? WHERE id = ?', 
-    [hashedPassword, id]
-  );
-  
-  return result.affectedRows > 0;
+  try {
+    const hashedPassword = await bcrypt.hash(nouveauMotDePasse, 10);
+
+    const result = await UtilisateurModel.findByIdAndUpdate(
+      id,
+      { mot_de_passe: hashedPassword },
+      { new: true }
+    );
+
+    return result !== null;
+  } catch (error) {
+    throw new Error(`Erreur lors de la mise à jour du mot de passe: ${error.message}`);
+  }
 }
 
 module.exports = {

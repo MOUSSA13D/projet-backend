@@ -25,16 +25,22 @@ async function login(req, res) {
         return res.status(401).json({ success: false, message: 'Email ou mot de passe incorrect.' });
       }
 
-      if (mot_de_passe !== agent.mot_de_passe) {
+      const motDePasseValide = await bcrypt.compare(mot_de_passe, agent.mot_de_passe);
+      if (!motDePasseValide) {
         return res.status(401).json({ success: false, message: 'Email ou mot de passe incorrect.' });
       }
 
-      const { mot_de_passe: _, ...agentSansMotDePasse } = agent;
+      // Transformer _id en id pour le frontend
+      const agentData = agent.toObject ? agent.toObject() : agent;
+      const { mot_de_passe: _, ...agentSansMotDePasse } = agentData;
+      
+     
+      
       return res.json({
         success: true,
         type: 'agent',
         data: agentSansMotDePasse,
-        token: genererToken(agent.id, 'agent'),
+        token: genererToken(agent._id || agent.id, 'agent'),
       });
     }
 
@@ -52,7 +58,7 @@ async function login(req, res) {
 
     // Vérifier le statut
     if (utilisateur.statut === 'bloqué') {
-      return res.status(403).json({ success: false, message: 'Votre compte est bloqué. Contactez l’administrateur.' });
+      return res.status(403).json({ success: false, message: 'Votre compte est bloqué. Contactez l administrateur.' });
     }
 
     // Vérification du mot de passe
@@ -61,21 +67,26 @@ async function login(req, res) {
       return res.status(401).json({ success: false, message: 'Numéro de compte ou mot de passe incorrect.' });
     }
 
-    const { mot_de_passe: _, ...utilisateurSansMotDePasse } = utilisateur;
+    // 🔧 CORRECTION : Utiliser l'ID de l'utilisateur, pas _id non défini
+    const utilisateurData = utilisateur.toObject ? utilisateur.toObject() : utilisateur;
+    const { mot_de_passe: _, _id: utilisateurId, __v, ...utilisateurSansMotDePasse } = utilisateurData;
+
+    const utilisateurFormatted = {
+      ...utilisateurSansMotDePasse,
+      id: utilisateurId.toString() // Utiliser l'_id de l'utilisateur
+    };
 
     res.json({
       success: true,
       type: utilisateur.role,
-      data: utilisateurSansMotDePasse,
+      data: utilisateurFormatted,
       compte,
-      token: genererToken(utilisateur.id, utilisateur.role),
+      token: genererToken(utilisateurId.toString(), utilisateur.role),
     });
   } catch (err) {
     console.error('Erreur lors de la connexion :', err.message);
     res.status(500).json({ success: false, message: 'Erreur interne du serveur.' });
   }
 }
-
-
 
 module.exports = { login };

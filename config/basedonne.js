@@ -1,32 +1,45 @@
-const mysql = require('mysql2/promise');
+// config/basedonne.js
+const mongoose = require('mongoose');
 
-let pool;
+let isConnected = false;
 
 async function connectDB() {
   try {
-    // Créer un pool de connexions MySQL
-    pool = mysql.createPool({
-      host:  'localhost',
-      user:  'root',
-      password:  '',
-      database:  'minibank',
-      waitForConnections: true,
-    //   connectionLimit: 10,
-    //   queueLimit: 0
-    });
-    // Tester la connexion
-    const connection = await pool.getConnection();
-    console.log('✅ Connecté à MySQL');
-    connection.release();
+    if (isConnected) {
+      console.log(' Déjà connecté à MongoDB');
+      return;
+    }
+
+  const con =  await mongoose.connect(process.env.MONGODB_URI);
+     console.log(`MongoDB Connected: ${con.connection.host}`);
+
+    isConnected = true;
+     console.log(`MongoDB Connected: ${con.connection.host}`);
   } catch (err) {
-    console.error('❌ Erreur de connexion MySQL :', err.message);
-    process.exit(1); // Arrêter le serveur si la connexion échoue
-  }
+    console.error(' Erreur de connexion MongoDB :', err.message);
+    process.exit(1);
+  } 
 }
 
+// Événements de connexion MongoDB
+mongoose.connection.on('connected', () => {
+  console.log('MongoDB connecté');
+});
+
+mongoose.connection.on('error', (err) => {
+  console.error('Erreur MongoDB :', err);
+});
+
+mongoose.connection.on('disconnected', () => {
+  console.log('MongoDB déconnecté');
+  isConnected = false;
+});
+
 function getDB() {
-  if (!pool) throw new Error('La base de données MySQL n’est pas connectée.');
-  return pool;
+  if (!isConnected) {
+    throw new Error('La base de données MongoDB n est pas connectée.');
+  }
+  return mongoose;
 }
 
 module.exports = { connectDB, getDB };
