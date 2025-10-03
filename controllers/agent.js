@@ -1,9 +1,10 @@
-// controllers/agent.js
+// controllers/agentController.js
 const Agent = require('../model/agentModel');
 const bcrypt = require('bcrypt');
+const fs = require('fs').promises;
+const path = require('path');
 
 const agentController = {
-  // Méthode existante
   async getAgentById(req, res) {
     try {
       const agent = new Agent();
@@ -16,7 +17,6 @@ const agentController = {
         });
       }
       
-      // Supprimer le mot de passe de la réponse
       const { mot_de_passe, ...agentSansMotDePasse } = agentData;
       
       res.json({ 
@@ -31,12 +31,10 @@ const agentController = {
     }
   },
 
-  // Nouvelle méthode pour créer un agent
   async createAgent(req, res) {
     try {
       const { nom, prenom, email, mot_de_passe, solde } = req.body;
 
-      // Validation des données requises
       if (!nom || !prenom || !email || !mot_de_passe) {
         return res.status(400).json({
           success: false,
@@ -44,7 +42,6 @@ const agentController = {
         });
       }
 
-      // Validation de l'email
       const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
       if (!emailRegex.test(email)) {
         return res.status(400).json({
@@ -53,7 +50,6 @@ const agentController = {
         });
       }
 
-      // Validation du mot de passe (minimum 6 caractères)
       if (mot_de_passe.length < 6) {
         return res.status(400).json({
           success: false,
@@ -63,33 +59,33 @@ const agentController = {
 
       const agent = new Agent();
 
-      // Vérifier si l'email existe déjà
       const existingAgent = await agent.findByEmail(email);
       if (existingAgent) {
+        // Supprimer la photo téléchargée si l'email existe déjà
+        if (req.file) {
+          await fs.unlink(req.file.path).catch(err => console.error(err));
+        }
         return res.status(409).json({
           success: false,
           message: 'Un agent avec cet email existe déjà'
         });
       }
 
-      // Hacher le mot de passe
       const saltRounds = 10;
       const hashedPassword = await bcrypt.hash(mot_de_passe, saltRounds);
 
-      // Préparer les données de l'agent
       const agentData = {
         nom: nom.trim(),
         prenom: prenom.trim(),
         email: email.toLowerCase().trim(),
         mot_de_passe: hashedPassword,
-        solde: solde || 0
+        solde: solde || 0,
+        photo: req.file ? req.file.filename : null
       };
 
-      // Créer l'agent
       const nouvelAgent = await agent.createAgent(agentData);
 
-      // Supprimer le mot de passe de la réponse
-      const { mot_de_passe: _, ...agentResponse } = nouvelAgent.toObject();
+      const { mot_de_passe: _, ...agentResponse } = nouvelAgent;
 
       res.status(201).json({
         success: true,
@@ -98,41 +94,25 @@ const agentController = {
       });
 
     } catch (error) {
-      // Gestion des erreurs de validation MongoDB
-      if (error.name === 'ValidationError') {
-        const errors = Object.values(error.errors).map(err => err.message);
-        return res.status(400).json({
-          success: false,
-          message: 'Erreur de validation',
-          errors: errors
-        });
+      // Supprimer la photo en cas d'erreur
+      if (req.file) {
+        await fs.unlink(req.file.path).catch(err => console.error(err));
       }
-
-      // Gestion des erreurs de duplication (email unique)
-      if (error.code === 11000) {
-        return res.status(409).json({
-          success: false,
-          message: 'Un agent avec cet email existe déjà'
-        });
-      }
-
       res.status(500).json({
         success: false,
         message: 'Erreur interne du serveur',
-        error: process.env.NODE_ENV === 'development' ? error.message : undefined
+        error: error.message 
       });
     }
   },
 
-  // Méthode pour obtenir tous les agents
   async getAllAgents(req, res) {
     try {
       const agent = new Agent();
       const agents = await agent.getAllAgents();
 
-      // Supprimer les mots de passe de la réponse
       const agentsSansMotDePasse = agents.map(agent => {
-        const { mot_de_passe, ...agentData } = agent.toObject();
+        const { mot_de_passe, ...agentData } = agent;
         return agentData;
       });
 
@@ -149,37 +129,97 @@ const agentController = {
     }
   },
 
-  // Méthode pour mettre à jour un agent
   async updateAgent(req, res) {
     try {
       const { id } = req.params;
-      const updateData = req.body;
+      const { nom, prenom, email } = req.body;
 
-      // Supprimer les champs qui ne doivent pas être mis à jour directement
-      delete updateData.mot_de_passe;
-      delete updateData._id;
-      delete updateData.__v;
+      // Validation des champs
+      if (!nom && !prenom && !email && !req.file) {
+        return res.status(400).json({
+          success: false,
+          message: 'Aucune donnée à mettre à jour'
+        });
+      }
+
+      // Validation de l'email si fourni
+      if (email) {
+        const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+        if (!emailRegex.test(email)) {
+          // Supprimer la photo téléchargée si l'email est invalide
+          if (req.file) {
+            await fs.unlink(req.file.path).catch(err => console.error(err));
+          }
+          return res.status(400).json({
+            success: false,
+            message: 'Format d\'email invalide'
+          });
+        }
+
+        // Vérifier si l'email n'est pas déjà utilisé par un autre agent
+        const agent = new Agent();
+        const existingAgent = await agent.findByEmail(email);
+        
+        if (existingAgent && existingAgent.id !== id) {
+          // Supprimer la photo téléchargée si l'email existe déjà
+          if (req.file) {
+            await fs.unlink(req.file.path).catch(err => console.error(err));
+          }
+          return res.status(409).json({
+            success: false,
+            message: 'Cet email est déjà utilisé par un autre agent'
+          });
+        }
+      }
 
       const agent = new Agent();
-      const updatedAgent = await agent.updateAgent(id, updateData);
-
-      if (!updatedAgent) {
+      
+      // Récupérer l'ancienne photo si elle existe
+      const agentActuel = await agent.getAgentById(id);
+      if (!agentActuel) {
+        // Supprimer la nouvelle photo si l'agent n'existe pas
+        if (req.file) {
+          await fs.unlink(req.file.path).catch(err => console.error(err));
+        }
         return res.status(404).json({
           success: false,
           message: 'Agent introuvable'
         });
       }
 
-      // Supprimer le mot de passe de la réponse
-      const { mot_de_passe, ...agentResponse } = updatedAgent.toObject();
+      const updateData = {};
+      if (nom) updateData.nom = nom.trim();
+      if (prenom) updateData.prenom = prenom.trim();
+      if (email) updateData.email = email.toLowerCase().trim();
+      
+      // Gestion de la photo
+      if (req.file) {
+        updateData.photo = req.file.filename;
+        
+        // Supprimer l'ancienne photo si elle existe
+        if (agentActuel.photo) {
+          const oldPhotoPath = path.join(__dirname, '../uploads', agentActuel.photo);
+          await fs.unlink(oldPhotoPath).catch(err => 
+            console.error('Erreur lors de la suppression de l\'ancienne photo:', err)
+          );
+        }
+      }
+
+      const updatedAgent = await agent.updateAgent(id, updateData);
+
+      const { mot_de_passe, ...agentResponse } = updatedAgent;
 
       res.json({
         success: true,
-        message: 'Agent mis à jour avec succès',
+        message: 'Profil mis à jour avec succès',
         data: agentResponse
       });
 
     } catch (error) {
+      // Supprimer la photo en cas d'erreur
+      if (req.file) {
+        await fs.unlink(req.file.path).catch(err => console.error(err));
+      }
       res.status(500).json({
         success: false,
         message: error.message
@@ -187,24 +227,74 @@ const agentController = {
     }
   },
 
-  // Méthode pour supprimer un agent
-  async deleteAgent(req, res) {
+  async changePassword(req, res) {
     try {
       const { id } = req.params;
+      const { ancien_mot_de_passe, nouveau_mot_de_passe, confirmer_mot_de_passe } = req.body;
+
+      if (!ancien_mot_de_passe || !nouveau_mot_de_passe || !confirmer_mot_de_passe) {
+        return res.status(400).json({
+          success: false,
+          message: 'Tous les champs sont obligatoires'
+        });
+      }
+
+      if (nouveau_mot_de_passe !== confirmer_mot_de_passe) {
+        return res.status(400).json({
+          success: false,
+          message: 'Les mots de passe ne correspondent pas'
+        });
+      }
+
+      if (nouveau_mot_de_passe.length < 6) {
+        return res.status(400).json({
+          success: false,
+          message: 'Le nouveau mot de passe doit contenir au moins 6 caractères'
+        });
+      }
 
       const agent = new Agent();
-      const deleted = await agent.deleteAgent(id);
-
-      if (!deleted) {
+      const agentData = await agent.getAgentByIdWithPassword(id);
+      
+      if (!agentData) {
         return res.status(404).json({
           success: false,
           message: 'Agent introuvable'
         });
       }
 
+      const isPasswordValid = await bcrypt.compare(ancien_mot_de_passe, agentData.mot_de_passe);
+      
+      if (!isPasswordValid) {
+        return res.status(401).json({
+          success: false,
+          message: 'Mot de passe actuel incorrect'
+        });
+      }
+
+      const isSamePassword = await bcrypt.compare(nouveau_mot_de_passe, agentData.mot_de_passe);
+      if (isSamePassword) {
+        return res.status(400).json({
+          success: false,
+          message: 'Le nouveau mot de passe doit être différent de l\'ancien'
+        });
+      }
+
+      const saltRounds = 10;
+      const hashedPassword = await bcrypt.hash(nouveau_mot_de_passe, saltRounds);
+
+      const updatedAgent = await agent.updatePassword(id, hashedPassword);
+
+      if (!updatedAgent) {
+        return res.status(500).json({
+          success: false,
+          message: 'Erreur lors de la mise à jour du mot de passe'
+        });
+      }
+
       res.json({
         success: true,
-        message: 'Agent supprimé avec succès'
+        message: 'Mot de passe modifié avec succès'
       });
 
     } catch (error) {

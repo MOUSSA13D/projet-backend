@@ -54,10 +54,6 @@ const compteController = {
   },
 
 
- 
-
-
-
 
 
 };

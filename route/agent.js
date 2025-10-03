@@ -3,20 +3,27 @@ const express = require('express');
 const router = express.Router();
 const agentController = require('../controllers/agent');
 const { verifierToken } = require('../middlewere/authentification');
+const upload = require('../middlewere/upload');
 
 // Route pour créer un nouvel agent (POST)
-router.post('/', agentController.createAgent);
 
 // Route pour obtenir tous les agents (GET)
-router.get('/',  agentController.getAllAgents);
+router.get('/allAgent',  agentController.getAllAgents);
 
 // Route pour obtenir un agent par ID (GET)
 router.get('/:id', verifierToken, agentController.getAgentById);
 
 // Route pour mettre à jour un agent (PUT)
+
+router.post('/create', verifierToken, upload.single('photo'), agentController.createAgent);
+router.put('/update/:id', verifierToken, upload.single('photo'), agentController.updateAgent);
+
+
+// MODIFIÉ: Route PUT pour mise à jour du profil (sans mot de passe)
 router.put('/:id', verifierToken, agentController.updateAgent);
 
-// Route pour supprimer un agent (DELETE)
-router.delete('/:id', verifierToken, agentController.deleteAgent);
+// NOUVEAU: Route PATCH pour changement de mot de passe
+router.patch('/:id/password', verifierToken, agentController.changePassword);
+
 
 module.exports = router;

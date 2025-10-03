@@ -25,10 +25,10 @@ const transactionController = {
         });
       }
 
-      if (montant <= 0) {
+      if (montant <= 20) {
         return res.status(400).json({
           success: false,
-          message: 'Le montant doit être positif'
+          message: 'Le montant doit être plus de 20f'
         });
       }
 
@@ -135,6 +135,8 @@ const transactionController = {
       res.status(500).json({ success: false, message: error.message });
     }
   },
+
+  
 
   // Obtenir l'historique de toutes les transactions
   async getAllTransactions(req, res) {

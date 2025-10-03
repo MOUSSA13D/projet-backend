@@ -1,7 +1,6 @@
 // model/agentModel.js
 const mongoose = require('mongoose');
 
-// Schéma pour l'agent
 const agentSchema = new mongoose.Schema({
   nom: {
     type: String,
@@ -28,15 +27,18 @@ const agentSchema = new mongoose.Schema({
     type: Number,
     default: 0,
     min: 0
+  },
+  photo: {
+    type: String,
+    default: null
   }
 }, {
-  timestamps: { 
+  timestamps: {
     createdAt: 'date_creation',
-    updatedAt: 'date_modification' 
+    updatedAt: 'date_modification'
   }
 });
 
-// Transformer automatiquement _id en id
 agentSchema.set('toJSON', {
   transform: function(doc, ret) {
     ret.id = ret._id;
@@ -46,7 +48,6 @@ agentSchema.set('toJSON', {
   }
 });
 
-// Modèle Agent
 const AgentModel = mongoose.model('Agent', agentSchema, 'agents');
 
 class Agent {
@@ -58,6 +59,27 @@ class Agent {
     try {
       const agent = await this.model.findById(id);
       return agent ? agent.toJSON() : null;
+    } catch (error) {
+      throw new Error(`Erreur lors de la récupération de l'agent: ${error.message}`);
+    }
+  }
+
+  async getAgentByIdWithPassword(id) {
+    try {
+      const agent = await this.model.findById(id).select('+mot_de_passe');
+      if (!agent) return null;
+      
+      return {
+        id: agent._id.toString(),
+        nom: agent.nom,
+        prenom: agent.prenom,
+        email: agent.email,
+        mot_de_passe: agent.mot_de_passe,
+        solde: agent.solde,
+        photo: agent.photo,
+        date_creation: agent.date_creation,
+        date_modification: agent.date_modification
+      };
     } catch (error) {
       throw new Error(`Erreur lors de la récupération de l'agent: ${error.message}`);
     }
@@ -84,7 +106,7 @@ class Agent {
   async updateSolde(id, nouveauSolde) {
     try {
       const result = await this.model.findByIdAndUpdate(
-        id, 
+        id,
         { solde: nouveauSolde },
         { new: true }
       );
@@ -107,7 +129,7 @@ class Agent {
   async updateAgent(id, updateData) {
     try {
       const result = await this.model.findByIdAndUpdate(
-        id, 
+        id,
         updateData,
         { new: true, runValidators: true }
       );
@@ -117,12 +139,16 @@ class Agent {
     }
   }
 
-  async deleteAgent(id) {
+  async updatePassword(id, hashedPassword) {
     try {
-      const result = await this.model.findByIdAndDelete(id);
+      const result = await this.model.findByIdAndUpdate(
+        id,
+        { mot_de_passe: hashedPassword },
+        { new: true }
+      );
       return result ? result.toJSON() : null;
     } catch (error) {
-      throw new Error(`Erreur lors de la suppression de l'agent: ${error.message}`);
+      throw new Error(`Erreur lors de la mise à jour du mot de passe: ${error.message}`);
     }
   }
 }

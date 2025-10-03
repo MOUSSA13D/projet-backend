@@ -123,6 +123,19 @@ class Compte {
     }
   }
 
+
+  // À ajouter dans la classe Compte dans compteModel.js
+
+// Supprimer un compte par ID utilisateur
+async deleteCompte(utilisateur_id) {
+  try {
+    const result = await this.model.findOneAndDelete({ utilisateur_id });
+    return result !== null;
+  } catch (error) {
+    throw new Error(`Erreur lors de la suppression du compte: ${error.message}`);
+  }
+}
+
   // Mettre à jour le solde d'un compte (par numéro de compte)
   async updateSolde(numero_compte, nouveauSolde) {
     try {

@@ -40,7 +40,7 @@ const utilisateurSchema = new mongoose.Schema({
   },
   role: {
     type: String,
-    enum: ['client', 'distributeur', 'admin'],
+    enum: ['client', 'distributeur'],
     required: true
   },
   photo: {
@@ -204,13 +204,53 @@ async function updatePassword(id, nouveauMotDePasse) {
   }
 }
 
+// Supprimer un utilisateur
+async function deleteUser(id) {
+  try {
+    const result = await UtilisateurModel.findByIdAndDelete(id);
+    return result !== null;
+  } catch (error) {
+    throw new Error(`Erreur lors de la suppression de l'utilisateur: ${error.message}`);
+  }
+}
+
+// Supprimer plusieurs utilisateurs
+async function deleteManyUsers(ids) {
+  try {
+    const result = await UtilisateurModel.deleteMany({
+      _id: { $in: ids }
+    });
+    return result.deletedCount;
+  } catch (error) {
+    throw new Error(`Erreur lors de la suppression multiple: ${error.message}`);
+  }
+}
+
+// Mettre à jour le statut de plusieurs utilisateurs
+async function updateManyStatuses(ids, statut) {
+  try {
+    const result = await UtilisateurModel.updateMany(
+      { _id: { $in: ids } },
+      { statut },
+      { runValidators: true }
+    );
+    return result.modifiedCount;
+  } catch (error) {
+    throw new Error(`Erreur lors de la mise à jour multiple des statuts: ${error.message}`);
+  }
+}
+
+
 module.exports = {
   createUser,
   findByEmail,
   findById,
   verifyPassword,
+  deleteUser,
   updateStatus,
   getAllUsers,
+  deleteManyUsers,
+  updateManyStatuses,
   updateUser,
   updatePassword
 };

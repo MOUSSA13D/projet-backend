@@ -6,6 +6,7 @@ const {
   findById, 
   verifyPassword, 
   updateStatus, 
+  deleteUser,
   getAllUsers, 
   updateUser,
   updatePassword
@@ -76,7 +77,7 @@ const utilisateurController = {
 
       const existingUser = await findByEmail(email);
       if (existingUser) return res.status(409).json({ success: false, message: 'Email déjà utilisé' });
-
+     
       // Mot de passe aléatoire
       const mot_de_passe = generateRandomPassword(6);
 
@@ -261,6 +262,158 @@ const utilisateurController = {
       res.status(500).json({ success: false, message: error.message });
     }
   },
+
+
+  // Supprimer un utilisateur
+async deleteUser(req, res) {
+  try {
+    const userId = req.params.id;
+
+    // Vérifier si l'utilisateur existe
+    const utilisateur = await findById(userId);
+    if (!utilisateur) {
+      return res.status(404).json({
+        success: false,
+        message: 'Utilisateur introuvable'
+      });
+    }
+
+    // Supprimer le compte associé
+    const compteModel = new Compte();
+    await compteModel.deleteCompte(userId);
+
+    // Supprimer l'utilisateur
+    const deleted = await deleteUser(userId);
+
+    if (!deleted) {
+      return res.status(500).json({
+        success: false,
+        message: 'Erreur lors de la suppression de l\'utilisateur'
+      });
+    }
+
+    res.json({
+      success: true,
+      message: 'Utilisateur supprimé avec succès'
+    });
+
+  } catch (error) {
+    res.status(500).json({ success: false, message: error.message });
+  }
+},
+
+async deleteManyUsers(req, res) {
+  try {
+    const { ids } = req.body;
+
+    if (!ids || !Array.isArray(ids) || ids.length === 0) {
+      return res.status(400).json({
+        success: false,
+        message: 'Un tableau d\'IDs est requis'
+      });
+    }
+
+    let successCount = 0;
+    let failedIds = [];
+    const compteModel = new Compte();
+
+    // Parcourir chaque ID
+    for (const id of ids) {
+      try {
+        // Vérifier si l'utilisateur existe
+        const utilisateur = await findById(id);
+        
+        if (utilisateur) {
+          // Supprimer le compte associé
+          await compteModel.deleteCompte(id);
+          
+          // Supprimer l'utilisateur
+          const deleted = await deleteUser(id);
+          
+          if (deleted) {
+            successCount++;
+          } else {
+            failedIds.push(id);
+          }
+        } else {
+          failedIds.push(id);
+        }
+      } catch (error) {
+        failedIds.push(id);
+      }
+    }
+
+    res.json({
+      success: true,
+      message: `${successCount} utilisateur(s) supprimé(s) avec succès`,
+      data: {
+        supprimés: successCount,
+        échoués: failedIds.length,
+        idsÉchoués: failedIds
+      }
+    });
+
+  } catch (error) {
+    res.status(500).json({ success: false, message: error.message });
+  }
+},
+
+// Bloquer/débloquer plusieurs utilisateurs
+async updateManyStatuses(req, res) {
+  try {
+    const { ids, statut } = req.body;
+
+    if (!ids || !Array.isArray(ids) || ids.length === 0) {
+      return res.status(400).json({
+        success: false,
+        message: 'Un tableau d\'IDs est requis'
+      });
+    }
+
+    if (!['actif', 'bloqué'].includes(statut)) {
+      return res.status(400).json({
+        success: false,
+        message: 'Statut invalide. Utilisez "actif" ou "bloqué"'
+      });
+    }
+
+    let successCount = 0;
+    let failedIds = [];
+    const compteModel = new Compte();
+
+    // Parcourir chaque ID
+    for (const id of ids) {
+      try {
+        // Mettre à jour le statut de l'utilisateur
+        const updated = await updateStatus(id, statut);
+        
+        if (updated) {
+          // Mettre à jour le statut du compte associé
+          await compteModel.updateStatut(id, statut);
+          successCount++;
+        } else {
+          failedIds.push(id);
+        }
+      } catch (error) {
+        failedIds.push(id);
+      }
+    }
+
+    res.json({
+      success: true,
+      message: `Statut de ${successCount} utilisateur(s) mis à jour avec succès`,
+      data: {
+        modifiés: successCount,
+        échoués: failedIds.length,
+        idsÉchoués: failedIds,
+        nouveauStatut: statut
+      }
+    });
+
+  } catch (error) {
+    res.status(500).json({ success: false, message: error.message });
+  }
+},
 
   // Changer mot de passe
   async changePassword(req, res) {
