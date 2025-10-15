@@ -30,7 +30,7 @@ async function sendAccountEmail(email, nom, prenom, numeroCompte, motDePasse) {
   });
 
   const mailOptions = {
-    from: 'fvdiliuwade@gmail.com',
+    from: 'moussa@gmail.com',
     to: email,
     subject: 'Bienvenue ! Votre compte a été créé',
     text: `Bonjour ${prenom} ${nom},\n\nVotre compte a été créé avec succès.\nNuméro de compte : ${numeroCompte}\nMot de passe : ${motDePasse}\n\nMerci.`
